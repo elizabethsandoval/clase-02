@@ -18,6 +18,7 @@ let appState = {
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
+    restoreSessionFromLocalStorage();
     loadInitialData();
 });
 
@@ -44,7 +45,14 @@ function initializeEventListeners() {
     document.querySelector('.form-buscar-reporte').addEventListener('submit', handleBuscarReporte);
 
     // Logout
-    document.querySelector('.btn-logout').addEventListener('click', handleLogout);
+    document.querySelector('.btn-logout').addEventListener('click', (e) => {
+        e.preventDefault();
+        showConfirmDialog(
+            '¿Realmente deseas cerrar sesión?',
+            () => handleLogout(),
+            () => {} // No hacer nada si cancela
+        );
+    });
 }
 
 function loadInitialData() {
@@ -98,41 +106,244 @@ function updateTabLocks() {
             link.style.pointerEvents = 'auto';
         } else {
             link.classList.add('locked');
-            link.style.opacity = '0.4';
-            link.style.pointerEvents = 'none';
+   UTILIDADES DE CARGA
+// ============================================
+function setButtonLoading(button, isLoading) {
+    if (isLoading) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = 'Cargando...';
+        button.disabled = true;
+        button.style.opacity = '0.6';
+        button.style.cursor = 'not-allowed';
+    } else {
+        button.textContent = button.dataset.originalText || 'Enviar';
+        button.disabled = false;
+        button.style.opacity = '1';
+        button.style.cursor = 'pointer';
+    }
+}
+
+// ============================================
+// UTILIDADES DE SESIÓN
+// ============================================
+function saveSessionToLocalStorage() {
+    const sessionData = {
+        isLoggedIn: appState.isLoggedIn,
+        userEmail: appState.userEmail,
+        timestamp: new Date().getTime()
+    };
+    localStorage.setItem('petcareSession', JSON.stringify(sessionData));
+}
+
+function restoreSessionFromLocalStorage() {
+    const sessionString = localStorage.getItem('petcareSession');
+    
+    const button = e.target.querySelector('button[type="submit"]');
+
+    if (password !== confirmPassword) {
+        showAlert('Las contraseñas no coinciden', 'error');
+        return;
+    }
+
+    setButtonLoading(button, true);
+
+    try {
+        const response = await fetch(`${API_BASE}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo: email, contraseña: password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert(data.mensaje || 'Registro exitoso', 'success');
+            document.querySelector('.form-registro').reset();
+        } else {
+            showAlert(data.mensaje || data.detail || 'Error en el registro', 'error');
+        }
+    } catch (error) {
+        showAlert('Error al registrar: ' + error.message, 'error');
+    } finally {
+        setButtonLoading(button, false
+    // Crear fondo oscuro
+    const overlay = document.createElement('div');
+    const button = e.target.querySelector('button[type="submit"]');
+
+    setButtonLoading(button, true);
+
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo: email, contraseña: password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.datos) {
+            appState.isLoggedIn = true;
+            appState.userEmail = email;
+
+            saveSessionToLocalStorage();
+            updateUserBadge();
+            updateTabLocks();
+            showAlert(data.mensaje || 'Login exitoso', 'success');
+            document.querySelector('.form-login').reset();
+
+            setTimeout(() => {
+                switchTab('servicios');
+            }, 500);
+        } else {
+            showAlert(data.mensaje || data.detail || 'Credenciales inválidas', 'error');
+        }
+    } catch (error) {
+        showAlert('Error al iniciar sesión: ' + error.message, 'error');
+    } finally {
+        setButtonLoading(button, false
+    messageEl.textContent = message;
+    clearSessionFromLocalStorage();
+    messageEl.style.cssText = `
+        margin-bottom: 2rem;
+        font-size: 1rem;
+        color: var(--color-text-primary);
+        text-align: center;
+    `;
+
+    // Botones
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.style.cssText = `
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    `;
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.style.cssText = `
+        padding: 0.75rem 1.5rem;
+        border: 2px solid var(--color-primary);
+        background-color: white;
+        color: var(--color-primary);
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    `;
+    cancelBtn.onmouseover = () => {
+        cancelBtn.style.backgroundColor = 'var(--color-primary-light)';
+    };
+    cancelBtn.onmouseout = () => {
+        cancelBtn.style.backgroundColor = 'white';
+    };
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = 'Confirmar';
+    confirmBtn.style.cssText = `
+        padding: 0.75rem 1.5rem;
+        background-color: var(--color-primary);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    `;
+    confirmBtn.onmouseover = () => {
+        confirmBtn.style.backgroundColor = 'var(--color-primary-dark)';
+    };
+    confirmBtn.onmouseout = () => {
+        confirmBtn.style.backgroundColor = 'var(--color-primary)';
+    };
+
+    buttonsContainer.appendChild(cancelBtn);
+    buttonsContainer.appendChild(confirmBtn);
+
+    modal.appendChild(messageEl);
+    modal.appendChild(buttonsContainer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const button = e.target.querySelector('button[type="submit"]');
+
+    setButtonLoading(button, true);
+
+    try {
+        const response = await fetch(`${API_BASE}/agregar-servicio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, precio })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert('Servicio agregado exitosamente', 'success');
+            document.querySelector('.form-servicio').reset();
+            await loadServicios();
+        } else {
+            showAlert(data.detail || 'Error al agregar servicio', 'error');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+    } finally {
+        setButtonLoading(button, false
+            onCancel();
         }
     });
 }
 
 // ============================================
 // FORMULARIO SALUDO
-// ============================================
-async function handleSaludo(e) {
-    e.preventDefault();
-    const nombre = document.getElementById('nombre-saludo').value;
+    const button = e.target.querySelector('button[type="submit"]');
+
+    setButtonLoading(button, true);
 
     try {
-        const response = await fetch(`${API_BASE}/bienvenido/${nombre}`);
+        const response = await fetch(`${API_BASE}/registrar-mascota`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo, nombre, tipo_servicio, fecha })
+        });
+
         const data = await response.json();
-        showAlert(data.mensaje, 'success');
-        document.querySelector('.form-saludo').reset();
+
+        if (response.ok) {
+            showAlert('Mascota registrada exitosamente', 'success');
+            document.querySelector('.form-mascota').reset();
+            await loadMascotas(correo);
+        } else {
+            showAlert(data.detail || 'Error al registrar mascota', 'error');
+        }
     } catch (error) {
-        showAlert('Error al saludar: ' + error.message, 'error');
+        showAlert('Error: ' + error.message, 'error');
+    } finally {
+        setButtonLoading(button, falseenvenido/${nombre}`);
+        const data = await response.json();
+    const button = e.target.querySelector('button[type="submit"]');
+    
+    if (!nombre) {
+        showAlert('Ingresa un nombre para buscar', 'error');
+        return;
     }
-}
 
-// ============================================
-// AUTENTICACIÓN
-// ============================================
-async function handleRegister(e) {
-    e.preventDefault();
-    const email = document.getElementById('registro-email').value;
-    const usuario = document.getElementById('registro-usuario').value;
-    const password = document.getElementById('registro-password').value;
-    const confirmPassword = document.getElementById('registro-confirm-password').value;
+    setButtonLoading(button, true);
 
-    if (password !== confirmPassword) {
-        showAlert('Las contraseñas no coinciden', 'error');
+    try {
+        const response = await fetch(`${API_BASE}/mascotas/${nombre}`);
+        const data = await response.json();
+
+        if (response.ok && data.mascotas) {
+            renderMascotas(data.mascotas);
+            showAlert('Búsqueda completada', 'success');
+        } else {
+            showAlert('No se encontraron mascotas', 'error');
+            renderMascotas([]);
+        }
+    } catch (error) {
+        showAlert('Error en la búsqueda: ' + error.message, 'error');
+    } finally {
+        setButtonLoading(button, false
         return;
     }
 
@@ -177,26 +388,31 @@ async function handleLogin(e) {
             updateUserBadge();
             updateTabLocks();
             showAlert(data.mensaje || 'Login exitoso', 'success');
-            document.querySelector('.form-login').reset();
+    const button = e.target.querySelector('button[type="submit"]');
 
-            setTimeout(() => {
-                switchTab('servicios');
-            }, 500);
+    if (!correo) {
+        showAlert('Ingresa un correo para buscar', 'error');
+        return;
+    }
+
+    setButtonLoading(button, true);
+
+    try {
+        const response = await fetch(`${API_BASE}/reporte/${correo}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            renderReporte(data);
+            showAlert('Reporte cargado', 'success');
         } else {
-            showAlert(data.mensaje || data.detail || 'Credenciales inválidas', 'error');
+            showAlert(data.detail || 'Error al cargar reporte', 'error');
+            renderReporte(null);
         }
     } catch (error) {
-        showAlert('Error al iniciar sesión: ' + error.message, 'error');
-    }
-}
-
-function handleLogout() {
-    appState.isLoggedIn = false;
-    appState.userEmail = null;
-
-    updateUserBadge();
-    updateTabLocks();
-    showAlert('Sesión cerrada', 'success');
+        showAlert('Error: ' + error.message, 'error');
+        renderReporte(null);
+    } finally {
+        setButtonLoading(button, falseada', 'success');
     switchTab('acceso');
 }
 
@@ -528,6 +744,35 @@ function showAlert(message, type = 'info') {
 
     alert.textContent = message;
     alertContainer.appendChild(alert);
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(30px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
 
     // Remover alerta después de 4 segundos
     setTimeout(() => {
