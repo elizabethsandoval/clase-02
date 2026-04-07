@@ -1,0 +1,569 @@
+// ============================================
+// CONFIGURACIÓN
+// ============================================
+const API_BASE = 'http://127.0.0.1:8000';
+const PROTECTED_TABS = ['servicios', 'mascotas', 'reporte'];
+
+// ============================================
+// ESTADO GLOBAL
+// ============================================
+let appState = {
+    isLoggedIn: false,
+    userEmail: null,
+    servicios: []
+};
+
+// ============================================
+// INICIALIZACIÓN
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    initializeEventListeners();
+    loadInitialData();
+});
+
+// ============================================
+// EVENT LISTENERS
+// ============================================
+function initializeEventListeners() {
+    // Navegación
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tabName = link.dataset.tab;
+            switchTab(tabName);
+        });
+    });
+
+    // Formularios
+    document.querySelector('.form-saludo').addEventListener('submit', handleSaludo);
+    document.querySelector('.form-registro').addEventListener('submit', handleRegister);
+    document.querySelector('.form-login').addEventListener('submit', handleLogin);
+    document.querySelector('.form-servicio').addEventListener('submit', handleAgregarServicio);
+    document.querySelector('.form-mascota').addEventListener('submit', handleRegistrarMascota);
+    document.querySelector('.form-buscar-mascota').addEventListener('submit', handleBuscarMascota);
+    document.querySelector('.form-buscar-reporte').addEventListener('submit', handleBuscarReporte);
+
+    // Logout
+    document.querySelector('.btn-logout').addEventListener('click', handleLogout);
+}
+
+function loadInitialData() {
+    loadServicios();
+}
+
+// ============================================
+// NAVEGACIÓN Y TABS
+// ============================================
+function switchTab(tabName) {
+    // Validar acceso a tabs protegidos
+    if (PROTECTED_TABS.includes(tabName) && !appState.isLoggedIn) {
+        showAlert('Debes iniciar sesión para acceder a esta sección', 'error');
+        return;
+    }
+
+    // Remover clase active de todas las secciones
+    document.querySelectorAll('.section').forEach(section => {
+        section.classList.remove('active');
+    });
+
+    // Remover clase active de todos los nav-links
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+
+    // Agregar clase active a la sección seleccionada
+    const section = document.getElementById(tabName);
+    if (section) {
+        section.classList.add('active');
+    }
+
+    // Agregar clase active al nav-link
+    const link = document.querySelector(`[data-tab="${tabName}"]`);
+    if (link) {
+        link.classList.add('active');
+    }
+
+    // Acciones especiales por tab
+    if (tabName === 'reporte' && appState.isLoggedIn) {
+        document.getElementById('reporte-email').value = appState.userEmail;
+    }
+}
+
+function updateTabLocks() {
+    PROTECTED_TABS.forEach(tabName => {
+        const link = document.querySelector(`[data-tab="${tabName}"]`);
+        if (appState.isLoggedIn) {
+            link.classList.remove('locked');
+            link.style.opacity = '1';
+            link.style.pointerEvents = 'auto';
+        } else {
+            link.classList.add('locked');
+            link.style.opacity = '0.4';
+            link.style.pointerEvents = 'none';
+        }
+    });
+}
+
+// ============================================
+// FORMULARIO SALUDO
+// ============================================
+async function handleSaludo(e) {
+    e.preventDefault();
+    const nombre = document.getElementById('nombre-saludo').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/bienvenido/${nombre}`);
+        const data = await response.json();
+        showAlert(data.mensaje, 'success');
+        document.querySelector('.form-saludo').reset();
+    } catch (error) {
+        showAlert('Error al saludar: ' + error.message, 'error');
+    }
+}
+
+// ============================================
+// AUTENTICACIÓN
+// ============================================
+async function handleRegister(e) {
+    e.preventDefault();
+    const email = document.getElementById('registro-email').value;
+    const usuario = document.getElementById('registro-usuario').value;
+    const password = document.getElementById('registro-password').value;
+    const confirmPassword = document.getElementById('registro-confirm-password').value;
+
+    if (password !== confirmPassword) {
+        showAlert('Las contraseñas no coinciden', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo: email, contraseña: password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert(data.mensaje || 'Registro exitoso', 'success');
+            document.querySelector('.form-registro').reset();
+        } else {
+            showAlert(data.mensaje || data.detail || 'Error en el registro', 'error');
+        }
+    } catch (error) {
+        showAlert('Error al registrar: ' + error.message, 'error');
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo: email, contraseña: password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.datos) {
+            appState.isLoggedIn = true;
+            appState.userEmail = email;
+
+            updateUserBadge();
+            updateTabLocks();
+            showAlert(data.mensaje || 'Login exitoso', 'success');
+            document.querySelector('.form-login').reset();
+
+            setTimeout(() => {
+                switchTab('servicios');
+            }, 500);
+        } else {
+            showAlert(data.mensaje || data.detail || 'Credenciales inválidas', 'error');
+        }
+    } catch (error) {
+        showAlert('Error al iniciar sesión: ' + error.message, 'error');
+    }
+}
+
+function handleLogout() {
+    appState.isLoggedIn = false;
+    appState.userEmail = null;
+
+    updateUserBadge();
+    updateTabLocks();
+    showAlert('Sesión cerrada', 'success');
+    switchTab('acceso');
+}
+
+function updateUserBadge() {
+    const userNameEl = document.querySelector('.user-name');
+    if (appState.isLoggedIn) {
+        userNameEl.textContent = appState.userEmail.split('@')[0];
+    } else {
+        userNameEl.textContent = 'Usuario';
+    }
+}
+
+// ============================================
+// SERVICIOS
+// ============================================
+async function loadServicios() {
+    try {
+        const response = await fetch(`${API_BASE}/servicios`);
+        const data = await response.json();
+        appState.servicios = data.servicios || [];
+        renderServicios();
+        updateSelectServicios();
+    } catch (error) {
+        console.error('Error al cargar servicios:', error);
+    }
+}
+
+function renderServicios() {
+    const lista = document.getElementById('lista-servicios');
+    if (appState.servicios.length === 0) {
+        lista.innerHTML = '<li>No hay servicios disponibles</li>';
+        return;
+    }
+
+    lista.innerHTML = appState.servicios
+        .map(servicio => `
+            <li>
+                <strong>${servicio.nombre}</strong>
+                <span style="color: var(--color-primary); font-weight: 600;">$${servicio.precio.toFixed(2)}</span>
+            </li>
+        `)
+        .join('');
+}
+
+function updateSelectServicios() {
+    const select = document.getElementById('mascota-servicio');
+    select.innerHTML = '<option value="">Selecciona un servicio</option>';
+    appState.servicios.forEach(servicio => {
+        const option = document.createElement('option');
+        option.value = servicio.nombre;
+        option.textContent = `${servicio.nombre} - $${servicio.precio.toFixed(2)}`;
+        select.appendChild(option);
+    });
+}
+
+async function handleAgregarServicio(e) {
+    e.preventDefault();
+    const nombre = document.getElementById('servicio-nombre').value;
+    const precio = parseFloat(document.getElementById('servicio-precio').value);
+
+    try {
+        const response = await fetch(`${API_BASE}/agregar-servicio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, precio })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert('Servicio agregado exitosamente', 'success');
+            document.querySelector('.form-servicio').reset();
+            await loadServicios();
+        } else {
+            showAlert(data.detail || 'Error al agregar servicio', 'error');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+    }
+}
+
+// ============================================
+// MASCOTAS
+// ============================================
+async function handleRegistrarMascota(e) {
+    e.preventDefault();
+    const correo = document.getElementById('mascota-email').value;
+    const nombre = document.getElementById('mascota-nombre').value;
+    const tipo_servicio = document.getElementById('mascota-servicio').value;
+    const fecha = document.getElementById('mascota-fecha').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/registrar-mascota`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo, nombre, tipo_servicio, fecha })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert('Mascota registrada exitosamente', 'success');
+            document.querySelector('.form-mascota').reset();
+            await loadMascotas(correo);
+        } else {
+            showAlert(data.detail || 'Error al registrar mascota', 'error');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+    }
+}
+
+async function handleBuscarMascota(e) {
+    e.preventDefault();
+    const nombre = document.getElementById('buscar-mascota-nombre').value;
+    
+    if (!nombre) {
+        showAlert('Ingresa un nombre para buscar', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/mascotas/${nombre}`);
+        const data = await response.json();
+
+        if (response.ok && data.mascotas) {
+            renderMascotas(data.mascotas);
+            showAlert('Búsqueda completada', 'success');
+        } else {
+            showAlert('No se encontraron mascotas', 'error');
+            renderMascotas([]);
+        }
+    } catch (error) {
+        showAlert('Error en la búsqueda: ' + error.message, 'error');
+    }
+}
+
+async function loadMascotas(correo) {
+    try {
+        const response = await fetch(`${API_BASE}/mascotas/${correo}`);
+        const data = await response.json();
+
+        if (response.ok && data.mascotas) {
+            renderMascotas(data.mascotas);
+        } else {
+            renderMascotas([]);
+        }
+    } catch (error) {
+        console.error('Error al cargar mascotas:', error);
+        renderMascotas([]);
+    }
+}
+
+function renderMascotas(mascotas) {
+    const lista = document.getElementById('lista-mascotas');
+    
+    if (!mascotas || mascotas.length === 0) {
+        lista.innerHTML = '<li>No hay mascotas registradas</li>';
+        return;
+    }
+
+    lista.innerHTML = mascotas
+        .map(mascota => `
+            <li>
+                <div style="margin-bottom: 0.5rem;">
+                    <strong style="font-size: 1.1rem;">${mascota.nombre}</strong>
+                </div>
+                <div style="font-size: 0.9rem; color: var(--color-text-secondary);">
+                    <p>📧 ${mascota.correo}</p>
+                    <p>🛠️ ${mascota.tipo_servicio}</p>
+                    <p>📅 ${mascota.fecha}</p>
+                </div>
+            </li>
+        `)
+        .join('');
+}
+
+// ============================================
+// REPORTE
+// ============================================
+async function handleBuscarReporte(e) {
+    e.preventDefault();
+    const correo = document.getElementById('reporte-email').value;
+
+    if (!correo) {
+        showAlert('Ingresa un correo para buscar', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/reporte/${correo}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            renderReporte(data);
+            showAlert('Reporte cargado', 'success');
+        } else {
+            showAlert(data.detail || 'Error al cargar reporte', 'error');
+            renderReporte(null);
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+        renderReporte(null);
+    }
+}
+
+function renderReporte(data) {
+    const resultados = document.getElementById('resultados-area');
+
+    if (!data) {
+        resultados.innerHTML = '<p>No hay datos disponibles</p>';
+        return;
+    }
+
+    const serviciosHtml = data.servicios && data.servicios.length > 0
+        ? data.servicios
+            .map(s => `<span style="
+                display: inline-block;
+                background-color: var(--color-primary);
+                color: white;
+                padding: 0.35rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.85rem;
+                margin-right: 0.5rem;
+                margin-bottom: 0.5rem;
+            ">${s}</span>`)
+            .join('')
+        : '<p style="color: var(--color-text-secondary);">Sin servicios</p>';
+
+    resultados.innerHTML = `
+        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+            <div style="
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 1rem;
+                margin-bottom: 2rem;
+            ">
+                <div style="
+                    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+                    color: white;
+                    padding: 1.5rem;
+                    border-radius: 10px;
+                    text-align: center;
+                    box-shadow: var(--shadow-md);
+                ">
+                    <p style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">Servicios Usados</p>
+                    <p style="font-size: 2rem; font-weight: 700;">${data.cantidad_servicios}</p>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, var(--color-success) 0%, #34d399 100%);
+                    color: white;
+                    padding: 1.5rem;
+                    border-radius: 10px;
+                    text-align: center;
+                    box-shadow: var(--shadow-md);
+                ">
+                    <p style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">Total Gastado</p>
+                    <p style="font-size: 2rem; font-weight: 700;">$${data.total_gastado.toFixed(2)}</p>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+                    color: white;
+                    padding: 1.5rem;
+                    border-radius: 10px;
+                    text-align: center;
+                    box-shadow: var(--shadow-md);
+                ">
+                    <p style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">Correo</p>
+                    <p style="font-size: 0.95rem; font-weight: 600; word-break: break-all;">${data.correo}</p>
+                </div>
+            </div>
+            <div>
+                <h4 style="margin-bottom: 1rem; color: var(--color-text-primary);">Servicios Utilizados</h4>
+                <div>${serviciosHtml}</div>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================
+// ALERTAS
+// ============================================
+function showAlert(message, type = 'info') {
+    // Crear contenedor de alerta si no existe
+    let alertContainer = document.getElementById('alert-container');
+    if (!alertContainer) {
+        alertContainer = document.createElement('div');
+        alertContainer.id = 'alert-container';
+        alertContainer.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        `;
+        document.body.appendChild(alertContainer);
+    }
+
+    // Crear alerta
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.style.cssText = `
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        animation: slideIn 0.3s ease;
+        box-shadow: var(--shadow-lg);
+    `;
+
+    if (type === 'success') {
+        alert.style.cssText += `
+            background-color: var(--color-success-light);
+            color: #047857;
+            border-left: 4px solid var(--color-success);
+        `;
+    } else if (type === 'error') {
+        alert.style.cssText += `
+            background-color: var(--color-error-light);
+            color: #991b1b;
+            border-left: 4px solid var(--color-error);
+        `;
+    } else {
+        alert.style.cssText += `
+            background-color: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        `;
+    }
+
+    alert.textContent = message;
+    alertContainer.appendChild(alert);
+
+    // Remover alerta después de 4 segundos
+    setTimeout(() => {
+        alert.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => alert.remove(), 300);
+    }, 4000);
+}
+
+// Agregar estilos de animación
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);
+
+// ============================================
+// INICIALIZAR BLOQUEOS DE TABS
+// ============================================
+updateTabLocks();
