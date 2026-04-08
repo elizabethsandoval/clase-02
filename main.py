@@ -27,17 +27,3 @@ def saludar():
 @app.get("/bienvenido/{nombre}")
 def saludar_persona(nombre: str):
     return {"mensaje": f"Hola {nombre}, ¡qué bueno verte por aquí!"}
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from routes.servicios import router as servicios_router
-from routes.auth import router as auth_router
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
